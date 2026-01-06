@@ -1564,7 +1564,7 @@ fn check_expr_handle_mut_arg(
             check_expr_has_mode(ctxt, record, typing, Mode::Spec, body, Mode::Spec)?;
             Ok(Mode::Spec)
         }
-        ExprX::AssignToPlace { place, rhs, op: _ } => {
+        ExprX::AssignToPlace { place, rhs, op: _, resolve: _ } => {
             if typing.in_forall_stmt {
                 return Err(error(
                     &expr.span,
@@ -1986,14 +1986,6 @@ fn check_expr_handle_mut_arg(
                 ));
             }
             Ok(Mode::Exec)
-        }
-        ExprX::AssumeResolved(e, _t) => {
-            if ctxt.check_ghost_blocks && typing.block_ghostness == Ghost::Exec {
-                return Err(error(&expr.span, "cannot use `resolve` in exec mode"));
-            }
-            let mut typing = typing.push_allow_prophecy_dependence(true);
-            check_expr_has_mode(ctxt, record, &mut typing, Mode::Proof, e, Mode::Proof)?;
-            Ok(outer_mode)
         }
         ExprX::UnaryOpr(UnaryOpr::HasResolved(_t), e) => {
             if ctxt.check_ghost_blocks && typing.block_ghostness == Ghost::Exec {
