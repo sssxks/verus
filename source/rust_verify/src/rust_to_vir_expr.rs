@@ -3057,7 +3057,12 @@ fn expr_assign_to_vir_innermost<'tcx>(
             None => None,
         };
 
-        return mk_expr(ExprX::AssignToPlace { place: vir_lhs, rhs: vir_rhs, op: op });
+        return mk_expr(ExprX::AssignToPlace {
+            place: vir_lhs,
+            rhs: vir_rhs,
+            op: op,
+            resolve: None,
+        });
     }
 
     fn init_not_mut(bctx: &BodyCtxt, lhs: &Expr) -> Result<bool, VirErr> {
@@ -3841,10 +3846,22 @@ pub(crate) fn deref_mut(bctx: &BodyCtxt, span: Span, place: &Place) -> Place {
     // This shows up a lot (in part due to adjustments) so we make the simplification
     // to avoid cluttering the encoding.
 
+    // *final(x) is equivalent to mut_ref_future(x)
+
     match &place.x {
         PlaceX::Temporary(e) => match &e.x {
             ExprX::BorrowMut(place) => {
                 return place.clone();
+            }
+            ExprX::Unary(UnaryOp::MutRefFinal, arg) => {
+                let t = match &*undecorate_typ(&place.typ) {
+                    TypX::MutRef(t) => t.clone(),
+                    _ => panic!("expected mut ref"),
+                };
+
+                let op = UnaryOp::MutRefFuture(vir::ast::MutRefFutureSourceName::Final);
+                let e = bctx.spanned_typed_new(span, &t, ExprX::Unary(op, arg.clone()));
+                return bctx.spanned_typed_new(span, &t, PlaceX::Temporary(e));
             }
             _ => {}
         },

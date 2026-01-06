@@ -1341,11 +1341,14 @@ fn check_expr_handle_mut_arg(
             }
             Ok(Mode::Spec)
         }
-        ExprX::Unary(UnaryOp::MutRefFuture, e1) => {
+        ExprX::Unary(UnaryOp::MutRefFuture(source_name), e1) => {
             if !typing.allow_prophecy_dependence {
                 return Err(error(
                     &expr.span,
-                    "cannot use prophecy-dependent function `mut_ref_future` in prophecy-independent context",
+                    format!(
+                        "cannot use prophecy-dependent function `{:}` in prophecy-independent context",
+                        source_name.as_str()
+                    ),
                 ));
             }
             check_expr(ctxt, record, typing, Mode::Spec, e1)?;
@@ -1561,7 +1564,7 @@ fn check_expr_handle_mut_arg(
             check_expr_has_mode(ctxt, record, typing, Mode::Spec, body, Mode::Spec)?;
             Ok(Mode::Spec)
         }
-        ExprX::AssignToPlace { place, rhs, op: _ } => {
+        ExprX::AssignToPlace { place, rhs, op: _, resolve: _ } => {
             if typing.in_forall_stmt {
                 return Err(error(
                     &expr.span,
@@ -1983,14 +1986,6 @@ fn check_expr_handle_mut_arg(
                 ));
             }
             Ok(Mode::Exec)
-        }
-        ExprX::AssumeResolved(e, _t) => {
-            if ctxt.check_ghost_blocks && typing.block_ghostness == Ghost::Exec {
-                return Err(error(&expr.span, "cannot use `resolve` in exec mode"));
-            }
-            let mut typing = typing.push_allow_prophecy_dependence(true);
-            check_expr_has_mode(ctxt, record, &mut typing, Mode::Proof, e, Mode::Proof)?;
-            Ok(outer_mode)
         }
         ExprX::UnaryOpr(UnaryOpr::HasResolved(_t), e) => {
             if ctxt.check_ghost_blocks && typing.block_ghostness == Ghost::Exec {
