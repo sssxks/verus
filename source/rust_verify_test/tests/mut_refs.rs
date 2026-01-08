@@ -145,6 +145,45 @@ test_verify_one_file_with_options! {
 }
 
 test_verify_one_file_with_options! {
+    #[test] test_after_borrow_proph ["new-mut-ref"] => verus_code! {
+        fn test() {
+            let mut x = 0;
+            let x_ref = &mut x;
+
+            let ghost y = after_borrow(x);
+
+            *x_ref = 20;
+        }
+    } => Err(err) => assert_vir_error_msg(err, "cannot use prophecy-dependent function `after_borrow` in prophecy-independent context")
+}
+
+test_verify_one_file_with_options! {
+    #[test] test_after_borrow_ok ["new-mut-ref"] => verus_code! {
+        fn test() {
+            let mut x = 0;
+            let x_ref = &mut x;
+
+            assert(*fin(x_ref) == after_borrow(x));
+
+            *x_ref = 20;
+        }
+    } => Ok(())
+}
+
+test_verify_one_file_with_options! {
+    #[test] test_after_borrow_bad_expr ["new-mut-ref"] => verus_code! {
+        fn test() {
+            let mut x = 0;
+            let x_ref = &mut x;
+
+            assert(after_borrow(true) == true);
+
+            *x_ref = 20;
+        }
+    } => Err(err) => assert_vir_error_msg(err, "`after_borrow` expects a local variable, possibly with dereferences or field accesses")
+}
+
+test_verify_one_file_with_options! {
     #[test] mut_ref_not_extensional ["new-mut-ref"] => verus_code! {
         // &mut T doesn't have extensionality because that would cause (==) to be
         // a prophetic operator
@@ -3007,4 +3046,39 @@ test_verify_one_file_with_options! {
             &mut a }), (loop {}), &mut c);
         }
     } => Err(e) => assert_fails(e, 2)
+}
+
+test_verify_one_file_with_options! {
+    #[test] mut_ref_with_implicit_box_deref ["new-mut-ref"] => verus_code! {
+        use vstd::prelude::*;
+
+        enum List {
+            Cons(u64, Box<List>),
+            Nil,
+        }
+
+        #[verifier::exec_allows_no_decreases_clause]
+        fn build_zero_list(len: u64) -> List {
+            let mut list = List::Nil;
+            let mut cur = &mut list;
+
+            let mut i = 0;
+            while i < len {
+                *cur = List::Cons(0, Box::new(List::Nil));
+
+                match cur {
+                    List::Cons(_, b) => {
+                        // Replace `cur` with a reference to the newly-created List::Nil,
+                        // the child of the previous `cur`.
+                        cur = &mut *b;
+                    }
+                    _ => { /* clearly unreachable */ }
+                }
+
+                i += 1;
+            }
+
+            return list;
+        }
+    } => Ok(())
 }
